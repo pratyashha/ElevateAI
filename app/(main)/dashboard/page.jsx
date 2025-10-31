@@ -6,13 +6,14 @@ import DashboardView from './_components/dashboard-view';
 
 const IndustryInsightsPage = async() => {
   try {
-    // Check onboarding status first
+    // Check onboarding status first - redirect immediately if not onboarded
     const { isOnboarded } = await getUserOnboardingStatus();
     
     if (!isOnboarded) {
       redirect("/onboarding");
     }
     
+    // Only proceed if user is onboarded
     const insights = await getIndustryInsights();
     
     if (!insights) {
@@ -34,10 +35,32 @@ const IndustryInsightsPage = async() => {
   } catch (error) {
     console.error("Error in IndustryInsightsPage:", error);
     
-    // Redirect to onboarding if user hasn't completed it
-    if (error.message.includes("User not found") || 
-        error.message.includes("Industry not set") ||
-        error.message.includes("Unable to fetch user data")) {
+    // Any error related to onboarding or user data should redirect to onboarding
+    const onboardingErrors = [
+      "User not found",
+      "Industry not set",
+      "Unable to fetch user data",
+      "Unauthorized",
+      "User not found. Please complete onboarding.",
+      "Industry not set. Please complete onboarding."
+    ];
+    
+    const isOnboardingError = onboardingErrors.some(errorMsg => 
+      error.message.includes(errorMsg)
+    );
+    
+    if (isOnboardingError) {
+      redirect("/onboarding");
+    }
+    
+    // For other errors, still try to check onboarding status as fallback
+    try {
+      const { isOnboarded } = await getUserOnboardingStatus();
+      if (!isOnboarded) {
+        redirect("/onboarding");
+      }
+    } catch (checkError) {
+      // If we can't check onboarding status, redirect to onboarding to be safe
       redirect("/onboarding");
     }
     
