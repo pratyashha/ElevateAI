@@ -4,16 +4,31 @@ import { redirect } from "next/navigation";
 import { getIndustryInsights } from "@/actions/dashboard";
 import DashboardView from './_components/dashboard-view';
 
+// Helper to check if error is a redirect error
+function isRedirectError(error) {
+  return error?.digest?.startsWith('NEXT_REDIRECT') || 
+         error?.message === 'NEXT_REDIRECT' ||
+         error?.name === 'NEXT_REDIRECT';
+}
+
 const IndustryInsightsPage = async() => {
+  // Check onboarding status first - redirect immediately if not onboarded
   try {
-    // Check onboarding status first - redirect immediately if not onboarded
     const { isOnboarded } = await getUserOnboardingStatus();
-    
     if (!isOnboarded) {
       redirect("/onboarding");
     }
-    
-    // Only proceed if user is onboarded
+  } catch (error) {
+    // Re-throw redirect errors immediately
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    // If we can't check onboarding status, redirect to onboarding to be safe
+    redirect("/onboarding");
+  }
+  
+  // Only proceed if user is onboarded
+  try {
     const insights = await getIndustryInsights();
     
     if (!insights) {
@@ -33,6 +48,11 @@ const IndustryInsightsPage = async() => {
       </div>
     )
   } catch (error) {
+    // Re-throw redirect errors immediately - they should propagate
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    
     console.error("Error in IndustryInsightsPage:", error);
     
     // Any error related to onboarding or user data should redirect to onboarding
@@ -46,7 +66,7 @@ const IndustryInsightsPage = async() => {
     ];
     
     const isOnboardingError = onboardingErrors.some(errorMsg => 
-      error.message.includes(errorMsg)
+      error.message?.includes(errorMsg)
     );
     
     if (isOnboardingError) {
@@ -60,6 +80,10 @@ const IndustryInsightsPage = async() => {
         redirect("/onboarding");
       }
     } catch (checkError) {
+      // Re-throw redirect errors
+      if (isRedirectError(checkError)) {
+        throw checkError;
+      }
       // If we can't check onboarding status, redirect to onboarding to be safe
       redirect("/onboarding");
     }
