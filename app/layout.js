@@ -22,7 +22,7 @@ const inter = Inter({
 })
 
 export const metadata = {
-  title: "CareerCrafter - AI Career Coach",
+  title: "Elevate AI - AI Career Coach",
   description: "Your smart guide to career growth",
 };
 
