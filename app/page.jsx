@@ -12,6 +12,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import { AvatarInitials } from "@/components/ui/avatar-initials";
 
 
 export default function Home() {
@@ -120,14 +121,8 @@ export default function Home() {
                 <CardContent className="pt-6 ">
                   <div className="flex flex-col  space-y-4">
                     <div className="flex items-center space-x-4 mb-2">
-                        <div className="relative w-12 h-12 shrink-0">
-                        <Image
-                          width={40}
-                          height={40}
-                          src={testimonial.image}
-                          alt={testimonial.author}
-                          className="rounded-full object-cover border-2 border-primary/20"
-                          />
+                        <div className="relative shrink-0">
+                          <AvatarInitials name={testimonial.author} size={48} />
                       </div>
                       <div>
                         <p className="font-semibold">{testimonial.author}</p>
