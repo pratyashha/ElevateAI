@@ -7,17 +7,22 @@ const isProtectedRoute = createRouteMatcher([
   '/interview(.*)',  
   '/ai-cover-letter(.*)',
   '/cover-letter(.*)',
-  '/onboarding(.*)'
+  '/onboarding(.*)',
+  '/redirect(.*)'
 ]);
 
-export default clerkMiddleware(async (auth,req)=> {
-  const {userId} = await auth();
+export default clerkMiddleware(async (authRequest, req) => {
+  const { userId } = await authRequest();
 
-  if(!userId && isProtectedRoute(req)){
-    const{redirectToSignIn} = await auth();
+  // Check authentication - if no user and trying to access protected route, redirect to sign in
+  if (!userId && isProtectedRoute(req)) {
+    const { redirectToSignIn } = await authRequest();
     return redirectToSignIn({ returnBackUrl: req.url });
   }
-   return NextResponse.next();
+
+  // Note: Onboarding checks are handled at the page level for better reliability
+  // This ensures Prisma queries work properly in Node.js runtime instead of edge runtime
+  return NextResponse.next();
 });
   
 export const config = {
