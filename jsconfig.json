@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
-    }
-  }
+    },
+    "skipLibCheck": true
+  },
+  "include": ["app/**/*", "components/**/*", "next-env.d.ts"],
+  "exclude": ["node_modules"]
 }
