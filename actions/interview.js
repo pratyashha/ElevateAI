@@ -4,14 +4,18 @@ import { auth } from "@clerk/nextjs/server";
 import db from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-});
+// Safe initialization for build time
+const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+const model = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash" }) : null;
 
 export async function generateQuiz(){
   const {userId} = await auth();
   if(!userId) throw new Error("Unauthorized");
+  
+  if (!model) {
+    throw new Error("AI service is not configured. Please check your API keys.");
+  }
 
   const user = await db.user.findUnique({
     where: {

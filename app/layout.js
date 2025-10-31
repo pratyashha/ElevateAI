@@ -27,10 +27,41 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+  // Get Clerk publishable key (safe for build time)
+  const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
+  // If Clerk key is missing during build, render without ClerkProvider (prevents build errors)
+  if (!clerkPublishableKey) {
+    console.warn("⚠️ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY not set (build-safe mode)");
+    return (
+      <html lang="en" suppressHydrationWarning={true}>
+        <body suppressHydrationWarning className={`${inter.className}`}>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <Header />
+            <main className="min-h-screen">{children}</main>
+            <Toaster richColors />
+            <footer className="bg-muted/50 py-12">
+              <div className="container mx-auto pc-4 text-center text-gray-200">
+                ~ Pratasha Tripathy
+              </div>
+            </footer>
+          </ThemeProvider>
+        </body>
+      </html>
+    );
+  }
+  
   return (
-    <ClerkProvider appearance={{
-      baseTheme: dark,
-    }}>
+    <ClerkProvider 
+      publishableKey={clerkPublishableKey}
+      appearance={{
+        baseTheme: dark,
+      }}>
 
 
     <html lang="en" webcrx="" suppressHydrationWarning={true}>

@@ -3,10 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(
-    process.env.GEMINI_API_KEY || process.env.GENAI_API_KEY,
-);
-const model = genAI.getGenerativeModel({model: "gemini-2.5-flash"});
+// Safe initialization for build time
+const apiKey = process.env.GEMINI_API_KEY || process.env.GENAI_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+const model = genAI ? genAI.getGenerativeModel({model: "gemini-2.5-flash"}) : null;
 
 export async function saveResume(content){
     try {
@@ -106,6 +106,10 @@ export async function improveWithAI({current, type}){
     8. Use industry Specific Keywords
     9. Do not add any new information that is not relevant to the role
     `;
+
+    if (!model) {
+        throw new Error('AI service is not configured. Please check your API keys.');
+    }
 
     try{
         const result = await model.generateContent(prompt);

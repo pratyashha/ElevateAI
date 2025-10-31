@@ -4,22 +4,27 @@ import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Initialize Google AI with error handling
+// Initialize Google AI with error handling (safe for build time)
 let genAI, model;
 try {
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        console.error("❌ Neither GOOGLE_API_KEY nor GEMINI_API_KEY is set in environment variables");
-        throw new Error("API key is required");
+        // Don't throw during build - just log and continue
+        console.warn("⚠️ Neither GOOGLE_API_KEY nor GEMINI_API_KEY is set in environment variables (build-safe mode)");
+        genAI = null;
+        model = null;
+    } else {
+        genAI = new GoogleGenerativeAI(apiKey);
+        model = genAI.getGenerativeModel({
+            model: "gemini-2.5-flash",
+        });
+        console.log("✅ Google AI initialized successfully with API key");
     }
-    
-    genAI = new GoogleGenerativeAI(apiKey);
-    model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
-    });
-    console.log("✅ Google AI initialized successfully with API key");
 } catch (error) {
-    console.error("❌ Failed to initialize Google AI:", error.message);
+    // Don't throw during build - just log and continue
+    console.warn("⚠️ Failed to initialize Google AI (build-safe mode):", error.message);
+    genAI = null;
+    model = null;
 }
 
 export const generateAIInsights = async (industry) => {
