@@ -77,7 +77,7 @@ export async function getIndustryInsights() {
     if (!userId) throw new Error("Unauthorized");
 
     try {
-        // Get user's industry
+        // Get user's industry - CRITICAL: Must verify this is the correct user
         let user;
         try {
             user = await prisma.user.findUnique({
@@ -85,11 +85,21 @@ export async function getIndustryInsights() {
                 select: { industry: true }
             });
         } catch (dbError) {
-            console.warn("Database query failed, using fallback industry");
-            user = null;
+            console.error("Database query failed for user:", userId, dbError.message);
+            throw new Error("Unable to fetch user data. Please try again.");
         }
         
-        const industry = user?.industry || "tech-software-development";
+        // If user doesn't exist, they need to complete onboarding first
+        if (!user) {
+            throw new Error("User not found. Please complete onboarding.");
+        }
+        
+        // If user hasn't set their industry, they need to complete onboarding
+        if (!user.industry) {
+            throw new Error("Industry not set. Please complete onboarding.");
+        }
+        
+        const industry = user.industry;
         
         // Check for cached data first
         let cachedInsight = null;
@@ -200,23 +210,14 @@ export async function getIndustryInsights() {
     } catch (error) {
         console.error("Error getting industry insights:", error);
         
-        // Final fallback
-        return {
-            id: "fallback",
-            industry: "tech-software-development",
-            salaryRange: [
-                { role: "Software Developer", min: 60000, max: 120000, median: 85000, location: "Remote" },
-                { role: "Senior Developer", min: 90000, max: 150000, median: 120000, location: "Remote" },
-                { role: "Tech Lead", min: 120000, max: 180000, median: 150000, location: "Remote" }
-            ],
-            growthRate: 15,
-            demandLevel: "HIGH",
-            topSkills: ["JavaScript", "React", "Node.js", "Python", "AWS"],
-            marketOutlook: "POSITIVE",
-            keyTrends: ["Remote Work", "AI Integration", "Cloud Computing", "DevOps", "Microservices"],
-            recommendedSkills: ["TypeScript", "Docker", "Kubernetes", "GraphQL", "Machine Learning"],
-            lastUpdated: new Date(),
-            nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        };
+        // Re-throw user-related errors so they can be handled properly (e.g., redirect to onboarding)
+        if (error.message.includes("User not found") || 
+            error.message.includes("Industry not set") ||
+            error.message.includes("Unable to fetch user data")) {
+            throw error;
+        }
+        
+        // Only return fallback for system/API errors, not user data issues
+        throw new Error("Failed to load industry insights. Please try again later.");
     }
 }

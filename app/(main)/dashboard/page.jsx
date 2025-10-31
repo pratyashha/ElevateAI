@@ -6,12 +6,12 @@ import DashboardView from './_components/dashboard-view';
 
 const IndustryInsightsPage = async() => {
   try {
-    // Temporarily bypass onboarding check to access existing data
-    // const { isOnboarded } = await getUserOnboardingStatus();
+    // Check onboarding status first
+    const { isOnboarded } = await getUserOnboardingStatus();
     
-    // if (!isOnboarded) {
-    //   redirect("/onboarding");
-    // }
+    if (!isOnboarded) {
+      redirect("/onboarding");
+    }
     
     const insights = await getIndustryInsights();
     
@@ -33,6 +33,14 @@ const IndustryInsightsPage = async() => {
     )
   } catch (error) {
     console.error("Error in IndustryInsightsPage:", error);
+    
+    // Redirect to onboarding if user hasn't completed it
+    if (error.message.includes("User not found") || 
+        error.message.includes("Industry not set") ||
+        error.message.includes("Unable to fetch user data")) {
+      redirect("/onboarding");
+    }
+    
     return (
       <div className='container mx-auto p-8'>
         <div className="text-center">
