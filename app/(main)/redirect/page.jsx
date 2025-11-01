@@ -2,6 +2,9 @@ import React from 'react'
 import { redirect } from "next/navigation";
 import { checkOnboardingStatus } from "@/lib/onboarding-check";
 
+// Force dynamic rendering - this page uses auth headers
+export const dynamic = 'force-dynamic';
+
 /**
  * This page handles post-authentication routing
  * - If user hasn't completed onboarding: redirect to /onboarding

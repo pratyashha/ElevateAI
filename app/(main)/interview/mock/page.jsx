@@ -5,6 +5,9 @@ import { ArrowLeft } from "lucide-react";
 import { requireOnboarding } from "@/lib/onboarding-check";
 import Quiz from "../_components/quiz";
 
+// Force dynamic rendering - this page uses auth headers
+export const dynamic = 'force-dynamic';
+
 const MockInterviewPage = async () => {
   // Check onboarding status - redirects if not onboarded
   await requireOnboarding();

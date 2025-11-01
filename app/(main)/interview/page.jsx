@@ -5,6 +5,9 @@ import StatsCards from './_components/stats-cards';
 import PerformanceChart from './_components/performance-chart';
 import QuizList from './_components/quiz-list';
 
+// Force dynamic rendering - this page uses auth headers
+export const dynamic = 'force-dynamic';
+
 const InterviewPage = async () => {
   // Check onboarding status - redirects if not onboarded
   await requireOnboarding();

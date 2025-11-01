@@ -4,6 +4,9 @@ import { getIndustryInsights } from "@/actions/dashboard";
 import { requireOnboarding, isRedirectError } from "@/lib/onboarding-check";
 import DashboardView from './_components/dashboard-view';
 
+// Force dynamic rendering - this page uses auth headers
+export const dynamic = 'force-dynamic';
+
 const IndustryInsightsPage = async() => {
   // Check onboarding status - redirects if not onboarded
   await requireOnboarding();

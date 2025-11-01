@@ -4,6 +4,9 @@ import { checkOnboardingStatus } from "@/lib/onboarding-check";
 import { industries } from "@/data/industries";
 import OnboardingForm from "./_components/onboarding-form";
 
+// Force dynamic rendering - this page uses auth headers
+export const dynamic = 'force-dynamic';
+
 const OnboardingPage = async () => {
   const { isOnboarded } = await checkOnboardingStatus();
 
