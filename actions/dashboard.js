@@ -29,6 +29,9 @@ const generateAIInsights = async (industry, subIndustry = null, userSkills = [],
     const industryObj = industries.find(ind => ind.id === mainIndustryId);
     const mainIndustryName = industryObj ? industryObj.name : mainIndustryId;
     
+    // Log for debugging
+    console.log(`🔍 DEBUG generateAIInsights: mainIndustryId="${mainIndustryId}", mainIndustryName="${mainIndustryName}", actualSubIndustry="${actualSubIndustry || 'none'}"`);
+    
     // Build industry description
     const industryDescription = actualSubIndustry 
         ? `${mainIndustryName} industry, specifically in ${actualSubIndustry}`
@@ -130,6 +133,9 @@ export async function getIndustryInsights() {
         const industry = user.industry;
         const userSkills = user.skills || [];
         
+        // CRITICAL: Log the exact industry value from database to debug
+        console.log(`🔍 DEBUG: User industry from DB: "${industry}", userSkills:`, userSkills);
+        
         // Parse industry and sub-industry
         let mainIndustryId = industry;
         let subIndustry = null;
@@ -139,7 +145,14 @@ export async function getIndustryInsights() {
             const parts = industry.split('-');
             mainIndustryId = parts[0];
             subIndustry = parts.slice(1).join(' ').replace(/-/g, ' ');
+            console.log(`🔍 DEBUG: Parsed industry - mainIndustryId: "${mainIndustryId}", subIndustry: "${subIndustry}"`);
+        } else {
+            console.log(`🔍 DEBUG: No sub-industry detected, using mainIndustryId: "${mainIndustryId}"`);
         }
+        
+        // Map industry ID to industry name for display
+        const industryObj = industries.find(ind => ind.id === mainIndustryId);
+        const mainIndustryName = industryObj ? industryObj.name : mainIndustryId;
         
         // Check for cached data first
         let cachedInsight = null;
@@ -147,6 +160,41 @@ export async function getIndustryInsights() {
             cachedInsight = await prisma.industryInsight.findUnique({
                 where: { industry }
             });
+            if (cachedInsight) {
+                console.log(`🔍 DEBUG: Found cached insight for industry: "${industry}"`);
+                // Verify the cached insight actually matches the user's industry (safety check)
+                if (cachedInsight.industry !== industry) {
+                    console.error(`⚠️ WARNING: Cached insight industry mismatch! Expected "${industry}", got "${cachedInsight.industry}". Clearing cache.`);
+                    cachedInsight = null; // Don't use mismatched cache
+                } else {
+                    // Check if cached insights look like the old hardcoded software developer fallback
+                    // This detects incorrectly cached data from the previous fallback mechanism
+                    const hasSoftwareDeveloperRoles = cachedInsight.salaryRange?.some(sr => 
+                        sr.role?.toLowerCase().includes('software developer') || 
+                        sr.role?.toLowerCase().includes('tech lead')
+                    );
+                    const hasTechSkills = cachedInsight.topSkills?.some(skill => 
+                        ['JavaScript', 'React', 'Node.js', 'Python', 'AWS', 'TypeScript', 'Docker', 'Kubernetes'].includes(skill)
+                    );
+                    
+                    // If user's industry is NOT tech, but cached data has tech roles/skills, it's bad cache
+                    if (mainIndustryId !== 'tech' && (hasSoftwareDeveloperRoles || hasTechSkills)) {
+                        console.error(`⚠️ WARNING: Cached insight for "${industry}" contains tech/software developer data but user selected "${mainIndustryId}" industry. This is incorrect cached data. Clearing cache.`);
+                        // Delete the bad cached insight
+                        try {
+                            await prisma.industryInsight.delete({
+                                where: { industry }
+                            });
+                            console.log(`🗑️ Deleted incorrect cached insight for "${industry}"`);
+                        } catch (deleteError) {
+                            console.error("Failed to delete bad cache:", deleteError.message);
+                        }
+                        cachedInsight = null; // Don't use bad cache
+                    }
+                }
+            } else {
+                console.log(`🔍 DEBUG: No cached insight found for industry: "${industry}"`);
+            }
         } catch (dbError) {
             console.warn("Could not fetch cached insights:", dbError.message);
         }
@@ -175,13 +223,16 @@ export async function getIndustryInsights() {
         }
         
         // Generate fresh AI insights (only if cache is expired or doesn't exist)
-        console.log(`🔄 Generating fresh AI insights for industry: ${industry}, subIndustry: ${subIndustry}, userSkills: ${userSkills}`);
+        const industryDescription = subIndustry 
+            ? `${mainIndustryName || mainIndustryId} industry, specifically in ${subIndustry}`
+            : `${mainIndustryName || mainIndustryId} industry`;
+        console.log(`🔄 Generating fresh AI insights for industry: "${industry}" (${industryDescription}), userSkills: ${userSkills.join(', ') || 'none'}`);
         let insights;
         let isFreshData = false;
         
         try {
             insights = await generateAIInsights(mainIndustryId, subIndustry, userSkills);
-            console.log("✅ Fresh AI insights generated successfully");
+            console.log(`✅ Fresh AI insights generated successfully for "${industry}"`);
             isFreshData = true;
         } catch (aiError) {
             console.error("❌ AI generation failed after retries:", aiError.message);
@@ -198,20 +249,13 @@ export async function getIndustryInsights() {
                 };
             }
             
-            // Final fallback data if AI fails and no cache exists
-            insights = {
-                salaryRange: [
-                    { role: "Software Developer", min: 60000, max: 120000, median: 85000, location: "Remote" },
-                    { role: "Senior Developer", min: 90000, max: 150000, median: 120000, location: "Remote" },
-                    { role: "Tech Lead", min: 120000, max: 180000, median: 150000, location: "Remote" }
-                ],
-                growthRate: 15,
-                demandLevel: "HIGH",
-                topSkills: ["JavaScript", "React", "Node.js", "Python", "AWS"],
-                marketOutlook: "POSITIVE",
-                keyTrends: ["Remote Work", "AI Integration", "Cloud Computing", "DevOps", "Microservices"],
-                recommendedSkills: ["TypeScript", "Docker", "Kubernetes", "GraphQL", "Machine Learning"],
-            };
+            // If AI fails and no cache exists, throw an error instead of returning wrong data
+            // This prevents showing incorrect industry-specific insights
+            const errorIndustryDescription = subIndustry 
+                ? `${mainIndustryName} industry, specifically in ${subIndustry}`
+                : `${mainIndustryName} industry`;
+            console.error(`❌ CRITICAL: AI generation failed for industry "${industry}" (${mainIndustryId}/${subIndustry || 'none'}) and no cached data exists.`);
+            throw new Error(`Unable to generate insights for ${errorIndustryDescription}. Please try again later or contact support.`);
         }
         
         // Try to update database with fresh insights (non-blocking)
