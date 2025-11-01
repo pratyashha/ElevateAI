@@ -3,19 +3,44 @@
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { industries } from "@/data/industries";
 
 // Initialize AI model
 const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 const model = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash" }) : null;
 
-const generateAIInsights = async (industry, retries = 3) => {
+const generateAIInsights = async (industry, subIndustry = null, userSkills = [], retries = 3) => {
     if (!apiKey || !model) {
         throw new Error("AI service is not configured. Please check your API keys.");
     }
 
+    // Parse industry if it contains sub-industry (format: "tech-software-development")
+    let mainIndustryId = industry;
+    let actualSubIndustry = subIndustry;
+    
+    if (industry.includes('-') && !subIndustry) {
+        const parts = industry.split('-');
+        mainIndustryId = parts[0];
+        actualSubIndustry = parts.slice(1).join(' ').replace(/-/g, ' ');
+    }
+    
+    // Map industry ID to industry name
+    const industryObj = industries.find(ind => ind.id === mainIndustryId);
+    const mainIndustryName = industryObj ? industryObj.name : mainIndustryId;
+    
+    // Build industry description
+    const industryDescription = actualSubIndustry 
+        ? `${mainIndustryName} industry, specifically in ${actualSubIndustry}`
+        : `${mainIndustryName} industry`;
+    
+    // Build user skills context
+    const skillsContext = userSkills && userSkills.length > 0
+        ? ` The user has the following skills: ${userSkills.join(', ')}. Consider these when generating recommended skills.`
+        : '';
+
     const prompt = `
-    Analyze the current state of the ${industry} industry in India and provide insights in only the following JSON format without any additional notes or explanations:
+    Analyze the current state of the ${industryDescription} in India and provide insights in only the following JSON format without any additional notes or explanations:
     {
         "salaryRange": [
             {"role": "string", "min": number, "max": number, "median": number, "location": "string"}
@@ -28,12 +53,15 @@ const generateAIInsights = async (industry, retries = 3) => {
         "recommendedSkills": ["skill1", "skill2"]
     }
     IMPORTANT: Return ONLY the JSON object, no other text, notes, markdown comments, or formatting.
-    - Include at least 5 common roles for Salary ranges.
+    - Focus specifically on ${actualSubIndustry ? actualSubIndustry : mainIndustryName} roles and requirements.
+    - Generate topSkills based specifically on ${industryDescription}. Include skills that are most relevant and in-demand for this specific industry${actualSubIndustry ? ' and sub-industry' : ''}.
+    - Include at least 5-7 common roles for Salary ranges specific to ${industryDescription}.
     - Salary amounts should be in Indian Rupees (INR). Use annual salary figures typical for Indian market.
     - For example: Entry level roles: 3-8 Lakhs (300000-800000), Mid level: 8-15 Lakhs (800000-1500000), Senior: 15-30 Lakhs (1500000-3000000).
     - Growth rate should be a percentage number (e.g., 15 for 15%).
-    - Include at least 5 skills and trends.
-    - Location should be Indian cities like "Bangalore", "Mumbai", "Delhi", "Hyderabad", "Pune", "Remote" etc.
+    - Include at least 5-7 top skills and trends specific to ${industryDescription}.
+    - Location should be Indian cities like "Bangalore", "Mumbai", "Delhi", "Hyderabad", "Pune", "Remote" etc.${skillsContext}
+    - Recommended skills should complement the user's existing skills and align with ${industryDescription} requirements.
     `;
 
     for (let attempt = 1; attempt <= retries; attempt++) {
@@ -73,16 +101,16 @@ const generateAIInsights = async (industry, retries = 3) => {
 };
 
 export async function getIndustryInsights() {
-    const { userId: clerkUserId } = await auth();
-    if (!clerkUserId) throw new Error("Unauthorized");
+        const { userId: clerkUserId } = await auth();
+        if (!clerkUserId) throw new Error("Unauthorized");
 
     try {
-        // Get user's industry - CRITICAL: Must verify this is the correct user
+        // Get user's industry and skills - CRITICAL: Must verify this is the correct user
         let user;
         try {
             user = await prisma.user.findUnique({
                 where: { clerkUserId: clerkUserId },
-                select: { industry: true }
+                select: { industry: true, skills: true }
             });
         } catch (dbError) {
             console.error("Database query failed for user:", clerkUserId, dbError.message);
@@ -100,6 +128,18 @@ export async function getIndustryInsights() {
         }
         
         const industry = user.industry;
+        const userSkills = user.skills || [];
+        
+        // Parse industry and sub-industry
+        let mainIndustryId = industry;
+        let subIndustry = null;
+        
+        // Check if industry contains sub-industry (format: "tech-software-development")
+        if (industry.includes('-')) {
+            const parts = industry.split('-');
+            mainIndustryId = parts[0];
+            subIndustry = parts.slice(1).join(' ').replace(/-/g, ' ');
+        }
         
         // Check for cached data first
         let cachedInsight = null;
@@ -135,12 +175,12 @@ export async function getIndustryInsights() {
         }
         
         // Generate fresh AI insights (only if cache is expired or doesn't exist)
-        console.log(`🔄 Generating fresh AI insights for industry: ${industry}`);
+        console.log(`🔄 Generating fresh AI insights for industry: ${industry}, subIndustry: ${subIndustry}, userSkills: ${userSkills}`);
         let insights;
         let isFreshData = false;
         
         try {
-            insights = await generateAIInsights(industry);
+            insights = await generateAIInsights(mainIndustryId, subIndustry, userSkills);
             console.log("✅ Fresh AI insights generated successfully");
             isFreshData = true;
         } catch (aiError) {

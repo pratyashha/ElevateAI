@@ -3,6 +3,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { industries } from "@/data/industries";
 
 // Helper function to normalize enum values
 function normalizeEnum(value, validValues, defaultValue) {
@@ -34,8 +35,8 @@ try {
     model = null;
 }
 
-export const generateAIInsights = async (industry) => {
-    console.log("🚀 Starting AI insights generation for industry:", industry);
+export const generateAIInsights = async (industry, subIndustry = null, userSkills = []) => {
+    console.log("🚀 Starting AI insights generation for industry:", industry, "subIndustry:", subIndustry, "userSkills:", userSkills);
     
     // Check if API key exists
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
@@ -52,23 +53,53 @@ export const generateAIInsights = async (industry) => {
     
     console.log("✅ API key found and model initialized, proceeding with AI generation");
     
+    // Parse industry if it contains sub-industry (format: "tech-software-development")
+    let mainIndustryId = industry;
+    let actualSubIndustry = subIndustry;
+    
+    if (industry.includes('-') && !subIndustry) {
+        const parts = industry.split('-');
+        mainIndustryId = parts[0];
+        actualSubIndustry = parts.slice(1).join(' ').replace(/-/g, ' ');
+    }
+    
+    // Map industry ID to industry name
+    const industryObj = industries.find(ind => ind.id === mainIndustryId);
+    const mainIndustryName = industryObj ? industryObj.name : mainIndustryId;
+    
+    // Build industry description
+    const industryDescription = actualSubIndustry 
+        ? `${mainIndustryName} industry, specifically in ${actualSubIndustry}`
+        : `${mainIndustryName} industry`;
+    
+    // Build user skills context
+    const skillsContext = userSkills && userSkills.length > 0
+        ? ` The user has the following skills: ${userSkills.join(', ')}. Consider these when generating recommended skills.`
+        : '';
+    
     const prompt = `
-    Analyze the current state of the ${industry} industry and provide insights in only the following JSON format without any additional notes or explanations:
+    Analyze the current state of the ${industryDescription} in India and provide insights in only the following JSON format without any additional notes or explanations:
     {
         "salaryRange": [
-            {"role": "string", "min": "number", "max": "number", "median": "number", "location": "string"}
+            {"role": "string", "min": number, "max": number, "median": number, "location": "string"}
         ],
-        "growthRate": "number",
+        "growthRate": number,
         "demandLevel": "HIGH" | "MEDIUM" | "LOW",
         "topSkills": ["skill1", "skill2"],
         "marketOutlook": "POSITIVE" | "NEUTRAL" | "NEGATIVE",
         "keyTrends": ["trend1", "trend2"],
         "recommendedSkills": ["skill1", "skill2"]
     }
-        IMPORTANT: Return ONLY the JSON object, no other text, notes, markdown comments, or formatting.
-        Include at least 5 common roles for Salary ranges.
-        Growth rate should be percentage.
-        Include at least 5 skills and trends.
+    IMPORTANT: Return ONLY the JSON object, no other text, notes, markdown comments, or formatting.
+    - Focus specifically on ${actualSubIndustry ? actualSubIndustry : mainIndustryName} roles and requirements.
+    - Generate topSkills based specifically on ${industryDescription}. Include skills that are most relevant and in-demand for this specific industry${actualSubIndustry ? ' and sub-industry' : ''}.
+    - Include at least 5-7 common roles for Salary ranges specific to ${industryDescription}.
+    - Salary amounts should be in Indian Rupees (INR). Use annual salary figures typical for Indian market.
+    - For example: Entry level roles: 3-8 Lakhs (300000-800000), Mid level: 8-15 Lakhs (800000-1500000), Senior: 15-30 Lakhs (1500000-3000000).
+    - Growth rate should be a percentage number (e.g., 15 for 15%).
+    - Include at least 5-7 top skills and trends specific to ${industryDescription}.
+    - Location should be Indian cities like "Bangalore", "Mumbai", "Delhi", "Hyderabad", "Pune", "Remote" etc.${skillsContext}
+    - Recommended skills should complement the user's existing skills and align with ${industryDescription} requirements.
     `;
 
     try {
@@ -180,6 +211,27 @@ export async function updateUser(data) {
         
         console.log("👤 User found:", { id: user.id, industry: user.industry }); 
          
+        // Parse industry and sub-industry
+        let mainIndustryId = industry;
+        let subIndustry = null;
+        
+        // Check if industry contains sub-industry (format: "tech-software-development")
+        if (industry.includes('-')) {
+            const parts = industry.split('-');
+            mainIndustryId = parts[0];
+            subIndustry = parts.slice(1).join(' ').replace(/-/g, ' ');
+        }
+        
+        // Parse user skills early to pass to AI
+        let userSkillsArray = [];
+        if (data.skills) {
+            if (Array.isArray(data.skills)) {
+                userSkillsArray = data.skills.filter(Boolean);
+            } else if (typeof data.skills === 'string') {
+                userSkillsArray = data.skills.split(',').map(s => s.trim()).filter(Boolean);
+            }
+        }
+        
         const result = await prisma.$transaction(async (tx) => {
             // find if industry exists
             let industryInsight = await tx.industryInsight.findUnique({
@@ -188,14 +240,14 @@ export async function updateUser(data) {
 
             // if it doesn't exist, create it with AI-generated values
             if (!industryInsight) {
-                console.log("Creating new industry insight for:", data.industry);
+                console.log("Creating new industry insight for:", data.industry, "subIndustry:", subIndustry, "with user skills:", userSkillsArray);
                 let insights;
                 
                 // Try AI generation first (with shorter timeout)
                 try {
                     console.log(" Attempting AI insights generation...");
                     // Use Promise.race to timeout AI generation if it takes too long
-                    const aiPromise = generateAIInsights(data.industry);
+                    const aiPromise = generateAIInsights(mainIndustryId, subIndustry, userSkillsArray);
                     const timeoutPromise = new Promise((_, reject) => 
                         setTimeout(() => reject(new Error("AI generation timeout")), 15000)
                     );
@@ -467,8 +519,18 @@ export async function forceRegenerateAIInsights(industry) {
         });
         console.log("🗑️ Deleted existing industry insights");
         
-        // Generate new AI insights
-        const insights = await generateAIInsights(industry);
+        // Parse industry if it contains sub-industry
+        let mainIndustryId = industry;
+        let subIndustry = null;
+        
+        if (industry.includes('-')) {
+            const parts = industry.split('-');
+            mainIndustryId = parts[0];
+            subIndustry = parts.slice(1).join(' ').replace(/-/g, ' ');
+        }
+        
+        // Generate new AI insights (no user skills for force regenerate)
+        const insights = await generateAIInsights(mainIndustryId, subIndustry, []);
         console.log("🤖 Generated new AI insights:", insights);
         
         // Create new industry insight
