@@ -24,6 +24,11 @@ const inter = Inter({
 export const metadata = {
   title: "Elevate AI - AI Career Coach",
   description: "Your smart guide to career growth",
+  icons: {
+    icon: '/fav.svg',
+    shortcut: '/fav.svg',
+    apple: '/fav.svg',
+  },
 };
 
 export default function RootLayout({ children }) {

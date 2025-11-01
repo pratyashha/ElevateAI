@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="ElevateAI E logo dark">
+  <defs>
+    <linearGradient id="blueGlowDark" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#56ccf2"/>
+      <stop offset="100%" stop-color="#2f80ed"/>
+    </linearGradient>
+    <filter id="glowDark">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Dark background circle -->
+  <circle cx="100" cy="100" r="95" fill="#0b0d12"/>
+
+  <!-- Open chevron-style arrow -->
+  <path d="M60 60 L100 25 L140 60" stroke="url(#blueGlowDark)" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#glowDark)"/>
+  <path d="M63 60 L100 30 L137 60" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Centered E -->
+  <text x="100" y="140" text-anchor="middle" font-family="Montserrat, Arial, sans-serif" font-size="100" font-weight="700" fill="#ffffff">
+    E
+  </text>
+</svg>
