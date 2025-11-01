@@ -39,12 +39,11 @@ const IndustryInsightsPage = async() => {
     
     console.error("Error in IndustryInsightsPage:", error);
     
-    // Any error related to onboarding or user data should redirect to onboarding
+    // Only redirect to onboarding for actual onboarding-related errors
     const onboardingErrors = [
       "User not found",
       "Industry not set",
       "Unable to fetch user data",
-      "Unauthorized",
       "User not found. Please complete onboarding.",
       "Industry not set. Please complete onboarding."
     ];
@@ -57,8 +56,17 @@ const IndustryInsightsPage = async() => {
       redirect("/onboarding");
     }
     
-    // For other errors, redirect to onboarding as safe fallback
-    redirect("/onboarding");
+    // For other errors (like AI generation failures), show error message instead of redirecting
+    // This prevents users from being redirected to onboarding when they're already onboarded
+    return (
+      <div className='container mx-auto p-8'>
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4 text-red-600">Unable to Load Insights</h2>
+          <p className="text-gray-600 mb-4">{error.message || "Failed to load industry insights. Please try again later."}</p>
+          <p className="text-sm text-gray-500">If this problem persists, please contact support.</p>
+        </div>
+      </div>
+    );
   }
 }
 

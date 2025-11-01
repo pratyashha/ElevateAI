@@ -179,7 +179,7 @@ export async function getIndustryInsights() {
                     
                     // If user's industry is NOT tech, but cached data has tech roles/skills, it's bad cache
                     if (mainIndustryId !== 'tech' && (hasSoftwareDeveloperRoles || hasTechSkills)) {
-                        console.error(`⚠️ WARNING: Cached insight for "${industry}" contains tech/software developer data but user selected "${mainIndustryId}" industry. This is incorrect cached data. Clearing cache.`);
+                        console.warn(`⚠️ WARNING: Cached insight for "${industry}" contains tech/software developer data but user selected "${mainIndustryId}" industry. This is incorrect cached data. Clearing cache.`);
                         // Delete the bad cached insight
                         try {
                             await prisma.industryInsight.delete({

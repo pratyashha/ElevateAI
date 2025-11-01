@@ -481,17 +481,21 @@ export async function getUserOnboardingStatus() {
     if (!clerkUserId) throw new Error("Unauthorized");
 
     try {
+        console.log(`🔍 DEBUG getUserOnboardingStatus: Checking for clerkUserId=${clerkUserId}`);
         const user = await prisma.user.findUnique({
             where: { clerkUserId: clerkUserId },
             select: { industry: true },
         });
 
         if (!user) {
+            console.log(`🔍 DEBUG getUserOnboardingStatus: User not found in database`);
             return { isOnboarded: false };
         }
 
+        const isOnboarded = !!user.industry;
+        console.log(`🔍 DEBUG getUserOnboardingStatus: User found, industry="${user.industry}", isOnboarded=${isOnboarded}`);
         return {
-            isOnboarded: !!user.industry,
+            isOnboarded,
         };
     } catch (error) {
         console.error("Error getting user onboarding status:", error.message);
