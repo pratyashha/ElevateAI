@@ -1,13 +1,6 @@
 import React from 'react'
-import { getUserOnboardingStatus } from "@/actions/user";
 import { redirect } from "next/navigation";
-
-// Helper to check if error is a redirect error
-function isRedirectError(error) {
-  return error?.digest?.startsWith('NEXT_REDIRECT') || 
-         error?.message === 'NEXT_REDIRECT' ||
-         error?.name === 'NEXT_REDIRECT';
-}
+import { checkOnboardingStatus } from "@/lib/onboarding-check";
 
 /**
  * This page handles post-authentication routing
@@ -15,22 +8,11 @@ function isRedirectError(error) {
  * - If user has completed onboarding: redirect to /dashboard
  */
 const RedirectPage = async () => {
-  try {
-    const { isOnboarded } = await getUserOnboardingStatus();
-    
-    if (isOnboarded) {
-      redirect("/dashboard");
-    } else {
-      redirect("/onboarding");
-    }
-  } catch (error) {
-    // Re-throw redirect errors immediately - they should propagate
-    if (isRedirectError(error)) {
-      throw error;
-    }
-    
-    console.error("Error in redirect page:", error);
-    // If we can't determine onboarding status, default to onboarding
+  const { isOnboarded } = await checkOnboardingStatus();
+  
+  if (isOnboarded) {
+    redirect("/dashboard");
+  } else {
     redirect("/onboarding");
   }
 }

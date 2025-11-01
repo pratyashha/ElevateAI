@@ -9,8 +9,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { testimonial } from "@/data/testimonials";
 import Image from "next/image";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { GetStartedButton } from "@/components/get-started-button";
 import { ArrowRight } from "lucide-react";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
 
@@ -197,11 +196,9 @@ export default function Home() {
             <p className="mx-auto max-w-[600px] text-center text-primary-foreground/80 md:text-xl">
               Join thousands of professionals who have transformed their careers with AI-powered guidance.
             </p>
-            <Link href="/dashboard" passHref>
-              <Button size="lg" variant="secondary" className="h-11 mt-5 animate-bounce">
-                Start Your Journey Today <ArrowRight className="ml-2 h-4 w-4"/>
-              </Button>
-            </Link>
+            <GetStartedButton size="lg" variant="secondary" className="h-11 mt-5 animate-bounce">
+              Start Your Journey Today <ArrowRight className="ml-2 h-4 w-4"/>
+            </GetStartedButton>
            </div>
            
             </div>

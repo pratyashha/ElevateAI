@@ -73,19 +73,19 @@ const generateAIInsights = async (industry, retries = 3) => {
 };
 
 export async function getIndustryInsights() {
-    const { userId } = await auth();
-    if (!userId) throw new Error("Unauthorized");
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) throw new Error("Unauthorized");
 
     try {
         // Get user's industry - CRITICAL: Must verify this is the correct user
         let user;
         try {
             user = await prisma.user.findUnique({
-                where: { clerkUserId: userId },
+                where: { clerkUserId: clerkUserId },
                 select: { industry: true }
             });
         } catch (dbError) {
-            console.error("Database query failed for user:", userId, dbError.message);
+            console.error("Database query failed for user:", clerkUserId, dbError.message);
             throw new Error("Unable to fetch user data. Please try again.");
         }
         

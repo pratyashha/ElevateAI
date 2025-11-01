@@ -20,7 +20,7 @@ import { AiOutlineEye } from 'react-icons/ai';
 import MarkdownPreview from '@uiw/react-markdown-preview';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
-import { useUser } from '@clerk/nextjs';
+// User auth handled via server actions
 
 
 // Dynamically import the editor to avoid SSR issues
@@ -49,8 +49,7 @@ const ResumeBuilder = ({ initialContent }) => {
     const [activeTab, setActiveTab] = useState('edit');
     const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
     const [previewContent, setPreviewContent] = useState(initialContent);
-    const {user} = useUser();
-    const[isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     // Parse initial content if it's a string
     const parsedContent = useMemo(() => {
@@ -127,7 +126,7 @@ const ResumeBuilder = ({ initialContent }) => {
         if (contactInfo?.linkedIn) parts.push(`🔗 <a href="${contactInfo.linkedIn}" target="_blank" rel="noopener noreferrer">LinkedIn</a>`);
         if (contactInfo?.website) parts.push(`🌐 <a href="${contactInfo.website}" target="_blank" rel="noopener noreferrer">Website</a>`);
 
-        const nameLine = user?.fullName ? `## <div align="center">${user.fullName}</div>` : '';
+        const nameLine = parsedContent?.contactInfo?.email ? `## <div align="center">${parsedContent.contactInfo.email.split('@')[0]}</div>` : '';
         if (parts.length === 0 && !nameLine) return '';
         const infoLine = parts.length > 0 ? `<div align="center">${parts.join(' | ')}</div>` : '';
         return [nameLine, infoLine].filter(Boolean).join('\n\n');

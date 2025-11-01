@@ -68,13 +68,29 @@ const OnboardingForm = ({ industries }) => {
       // Call the updateUser function
       const result = await updateUser(formattedData);
       
-      if (result) {
-        toast.success("Profile updated successfully!");
-        router.push("/dashboard");
+      // Handle both success object and thrown errors
+      if (result && typeof result === 'object') {
+        if (result.success === true) {
+          toast.success("Profile updated successfully!");
+          // Use window.location for a full page reload to ensure onboarding status is updated
+          setTimeout(() => {
+            window.location.href = "/dashboard";
+          }, 500);
+          return;
+        } else if (result.error) {
+          toast.error(result.error);
+          return;
+        }
       }
+      
+      // Fallback for unexpected response format
+      toast.error("Failed to update profile. Please try again.");
     } catch (error) {
       console.error("Error updating profile:", error);
-      toast.error("Failed to update profile. Please try again.");
+      
+      // Show user-friendly error message
+      const errorMessage = error?.message || "Failed to update profile. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

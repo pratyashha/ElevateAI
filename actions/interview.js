@@ -10,8 +10,8 @@ const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 const model = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash" }) : null;
 
 export async function generateQuiz(){
-  const {userId} = await auth();
-  if(!userId) throw new Error("Unauthorized");
+  const { userId: clerkUserId } = await auth();
+  if(!clerkUserId) throw new Error("Unauthorized");
   
   if (!model) {
     throw new Error("AI service is not configured. Please check your API keys.");
@@ -19,7 +19,7 @@ export async function generateQuiz(){
 
   const user = await db.user.findUnique({
     where: {
-        clerkUserId: userId,
+        clerkUserId: clerkUserId,
     }
   });
 
@@ -58,12 +58,12 @@ return quiz.questions
 }
 
 export async function saveQuizResult(questions, answers, score){
-  const {userId} = await auth();
-  if(!userId) throw new Error("Unauthorized");
+  const { userId: clerkUserId } = await auth();
+  if(!clerkUserId) throw new Error("Unauthorized");
 
   const user = await db.user.findUnique({
     where: {
-        clerkUserId: userId,
+        clerkUserId: clerkUserId,
     }
   });
   if(!user) throw new Error("User not found");
@@ -120,12 +120,12 @@ export async function saveQuizResult(questions, answers, score){
 }
 
 export async function getAssessments() {
-  const {userId} = await auth();
-  if(!userId) throw new Error("Unauthorized");
+  const { userId: clerkUserId } = await auth();
+  if(!clerkUserId) throw new Error("Unauthorized");
 
   const user = await db.user.findUnique({
     where: {
-        clerkUserId: userId,
+        clerkUserId: clerkUserId,
     }
   });
   if(!user) throw new Error("User not found");

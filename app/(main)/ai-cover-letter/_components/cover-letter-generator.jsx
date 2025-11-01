@@ -13,7 +13,7 @@ import { Loader2, Download, Copy, Sparkles, ArrowLeft, Save, AlertTriangle } fro
 import { generateCoverLetter, saveCoverLetter } from '@/actions/cover-letter';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { useUser } from '@clerk/nextjs';
+// User auth handled via server actions
 import { FaRegEdit } from 'react-icons/fa';
 import { AiOutlineEye } from 'react-icons/ai';
 
@@ -34,7 +34,6 @@ const coverLetterSchema = z.object({
 });
 
 const CoverLetterGenerator = () => {
-    const { user } = useUser();
     const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
     const [markdownContent, setMarkdownContent] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -50,8 +49,8 @@ const CoverLetterGenerator = () => {
         resolver: zodResolver(coverLetterSchema),
         defaultValues: {
             contactInfo: {
-                fullName: user?.fullName || '',
-                email: user?.primaryEmailAddress?.emailAddress || '',
+                fullName: '',
+                email: '',
             },
         },
     });

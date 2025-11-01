@@ -1,12 +1,14 @@
-"use client";
-
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { requireOnboarding } from "@/lib/onboarding-check";
 import Quiz from "../_components/quiz";
 
-const MockInterviewPage = () => {
+const MockInterviewPage = async () => {
+  // Check onboarding status - redirects if not onboarded
+  await requireOnboarding();
+
   return (
     <div className="space-y-6">
       {/* Back Button */}

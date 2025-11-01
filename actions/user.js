@@ -1,8 +1,15 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// Helper function to normalize enum values
+function normalizeEnum(value, validValues, defaultValue) {
+    if (!value) return defaultValue;
+    const upperValue = String(value).toUpperCase();
+    return validValues.includes(upperValue) ? upperValue : defaultValue;
+}
 
 // Initialize Google AI with error handling (safe for build time)
 let genAI, model;
@@ -97,20 +104,82 @@ export const testAIInsights = async (industry = "technology") => {
 };
 
 export async function updateUser(data) {
-    console.log(" updateUser called with data:", data);
-    
-    const { userId } = await auth();
-    if (!userId) throw new Error("Unauthorized");
-
-    const user = await prisma.user.findUnique({  
-        where: { clerkUserId: userId },
-    });
-
-    if(!user) throw new Error("User not found");
-    
-    console.log("👤 User found:", { id: user.id, industry: user.industry }); 
-     
     try {
+        console.log(" updateUser called with data:", data);
+        
+        // Validate input data
+        if (!data || typeof data !== 'object') {
+            return { success: false, error: "Invalid data provided." };
+        }
+        
+        const { userId: clerkUserId } = await auth();
+        if (!clerkUserId) {
+            return { success: false, error: "Unauthorized - Please sign in to continue." };
+        }
+
+        // Get user details from Clerk
+        const clerkUser = await currentUser();
+        if (!clerkUser) {
+            return { success: false, error: "User not found. Please sign in again." };
+        }
+
+        // Validate required data
+        if (!data.industry || typeof data.industry !== 'string' || data.industry.trim() === '') {
+            return { success: false, error: "Industry is required." };
+        }
+
+        // Clean and validate industry string
+        const industry = data.industry.trim();
+        if (industry.length === 0) {
+            return { success: false, error: "Industry cannot be empty." };
+        }
+        
+        // Ensure user exists - create if doesn't exist (for new signups)
+        let user = await prisma.user.findUnique({  
+            where: { clerkUserId: clerkUserId },
+        });
+
+        if (!user) {
+            console.log("User not found, creating new user for:", clerkUserId);
+            // Get user info from Clerk
+            const email = clerkUser.emailAddresses[0]?.emailAddress;
+            if (!email) {
+                return { success: false, error: "Email address is required. Please ensure your account has a verified email." };
+            }
+
+            const name = clerkUser.fullName || clerkUser.firstName || "User";
+
+            try {
+                user = await prisma.user.create({
+                    data: {
+                        clerkUserId: clerkUserId,
+                        name,
+                        imageUrl: clerkUser.imageUrl || null,
+                        email: email,
+                        skills: [], // Initialize skills as empty array
+                    },
+                });
+                console.log("✅ New user created:", user.id);
+            } catch (createError) {
+                // If user creation fails due to duplicate, try to fetch again
+                const errorMsg = String(createError?.message || "");
+                if (errorMsg.includes("Unique constraint") || errorMsg.includes("duplicate") || errorMsg.includes("P2002")) {
+                    console.log("User might have been created concurrently, fetching...");
+                    user = await prisma.user.findUnique({  
+                        where: { clerkUserId: clerkUserId },
+                    });
+                    if (!user) {
+                        return { success: false, error: "Failed to create user account. Please try again." };
+                    }
+                } else {
+                    // Re-throw to be caught by outer catch
+                    throw createError;
+                }
+            }
+        }
+        
+        console.log("👤 User found:", { id: user.id, industry: user.industry }); 
+         
         const result = await prisma.$transaction(async (tx) => {
             // find if industry exists
             let industryInsight = await tx.industryInsight.findUnique({
@@ -122,38 +191,89 @@ export async function updateUser(data) {
                 console.log("Creating new industry insight for:", data.industry);
                 let insights;
                 
-                // Try AI generation first
+                // Try AI generation first (with shorter timeout)
                 try {
                     console.log(" Attempting AI insights generation...");
-                    insights = await generateAIInsights(data.industry);
-                    console.log(" AI insights generated successfully:", insights);
+                    // Use Promise.race to timeout AI generation if it takes too long
+                    const aiPromise = generateAIInsights(data.industry);
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error("AI generation timeout")), 15000)
+                    );
+                    
+                    const rawInsights = await Promise.race([aiPromise, timeoutPromise]);
+                    
+                    // Normalize and validate the AI insights to match database schema
+                    insights = {
+                        salaryRange: Array.isArray(rawInsights.salaryRange) 
+                            ? rawInsights.salaryRange 
+                            : [],
+                        growthRate: typeof rawInsights.growthRate === 'number' 
+                            ? rawInsights.growthRate 
+                            : parseFloat(rawInsights.growthRate) || 15,
+                        demandLevel: normalizeEnum(rawInsights.demandLevel, ["HIGH", "MEDIUM", "LOW"], "MEDIUM"),
+                        topSkills: Array.isArray(rawInsights.topSkills) 
+                            ? rawInsights.topSkills.filter(Boolean) 
+                            : [],
+                        marketOutlook: normalizeEnum(rawInsights.marketOutlook, ["POSITIVE", "NEUTRAL", "NEGATIVE"], "NEUTRAL"),
+                        keyTrends: Array.isArray(rawInsights.keyTrends) 
+                            ? rawInsights.keyTrends.filter(Boolean) 
+                            : [],
+                        recommendedSkills: Array.isArray(rawInsights.recommendedSkills) 
+                            ? rawInsights.recommendedSkills.filter(Boolean) 
+                            : [],
+                    };
+                    console.log(" AI insights generated and normalized successfully:", insights);
                 } catch (aiError) {
                     console.error(" AI insights generation failed:", aiError.message);
-                    console.error(" Full error:", aiError);
                     
-                    // Create realistic fallback data instead of empty arrays
+                    // Create realistic fallback data with proper types and enum values
                     insights = {
                         salaryRange: [
-                            { role: "Software Developer", min: 60000, max: 120000, median: 85000, location: "Remote" },
-                            { role: "Senior Developer", min: 90000, max: 150000, median: 120000, location: "Remote" },
-                            { role: "Tech Lead", min: 120000, max: 180000, median: 150000, location: "Remote" }
+                            { role: "Software Developer", min: 600000, max: 1200000, median: 850000, location: "Remote" },
+                            { role: "Senior Developer", min: 900000, max: 1500000, median: 1200000, location: "Remote" },
+                            { role: "Tech Lead", min: 1200000, max: 1800000, median: 1500000, location: "Remote" }
                         ],
-                        growthRate: 15,
-                        demandLevel: "HIGH",
+                        growthRate: 15.0,
+                        demandLevel: "HIGH", // Must match enum
                         topSkills: ["JavaScript", "React", "Node.js", "Python", "AWS"],
-                        marketOutlook: "POSITIVE",
+                        marketOutlook: "POSITIVE", // Must match enum
                         keyTrends: ["Remote Work", "AI Integration", "Cloud Computing", "DevOps", "Microservices"],
                         recommendedSkills: ["TypeScript", "Docker", "Kubernetes", "GraphQL", "Machine Learning"],
                     };
                     console.log("Using realistic fallback insights:", insights);
                 }
                 
+                // Validate enum values one more time before saving
+                const validDemandLevels = ["HIGH", "MEDIUM", "LOW"];
+                const validMarketOutlooks = ["POSITIVE", "NEUTRAL", "NEGATIVE"];
+                
+                if (!validDemandLevels.includes(insights.demandLevel)) {
+                    insights.demandLevel = "MEDIUM";
+                }
+                if (!validMarketOutlooks.includes(insights.marketOutlook)) {
+                    insights.marketOutlook = "NEUTRAL";
+                }
+                
                 console.log("Final insights to save:", insights);
+                
+                // Ensure all arrays are non-empty (Prisma might have issues with empty arrays)
+                const finalTopSkills = insights.topSkills.length > 0 ? insights.topSkills : ["General Skills"];
+                const finalKeyTrends = insights.keyTrends.length > 0 ? insights.keyTrends : ["Industry Growth"];
+                const finalRecommendedSkills = insights.recommendedSkills.length > 0 ? insights.recommendedSkills : ["Continuous Learning"];
+                const finalSalaryRange = insights.salaryRange.length > 0 ? insights.salaryRange : [
+                    { role: "Entry Level", min: 300000, max: 600000, median: 450000, location: "Remote" }
+                ];
                 
                 industryInsight = await tx.industryInsight.create({
                     data: {
-                        industry: data.industry,
-                        ...insights,
+                        industry: industry,
+                        salaryRange: finalSalaryRange,
+                        growthRate: insights.growthRate || 10.0,
+                        demandLevel: insights.demandLevel,
+                        topSkills: finalTopSkills,
+                        marketOutlook: insights.marketOutlook,
+                        keyTrends: finalKeyTrends,
+                        recommendedSkills: finalRecommendedSkills,
                         nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
                     },
                 });
@@ -162,46 +282,155 @@ export async function updateUser(data) {
                 console.log("ℹ️ Industry insight already exists:", industryInsight);
             }
 
+            // Normalize experience - ensure it's a number or null
+            let experienceValue = null;
+            if (data.experience !== undefined && data.experience !== null && data.experience !== "") {
+                const expNum = typeof data.experience === 'number' 
+                    ? data.experience 
+                    : parseInt(data.experience, 10);
+                experienceValue = isNaN(expNum) ? null : expNum;
+            }
+            
+            // Normalize skills - ensure it's an array
+            let skillsArray = [];
+            if (data.skills) {
+                if (Array.isArray(data.skills)) {
+                    skillsArray = data.skills.filter(Boolean);
+                } else if (typeof data.skills === 'string') {
+                    skillsArray = data.skills.split(',').map(s => s.trim()).filter(Boolean);
+                }
+            }
+            
             // update the user
             const updatedUser = await tx.user.update({
                 where: {
                     id: user.id
                 },
                 data: {
-                    industry: data.industry,
-                    experience: data.experience,
-                    bio: data.bio,
-                    skills: data.skills,
+                    industry: industry,
+                    experience: experienceValue,
+                    bio: data.bio ? String(data.bio).trim() : null,
+                    skills: skillsArray,
                 },
             });
             return { updatedUser, industryInsight };
         }, {
-            timeout: 10000,
+            timeout: 30000, // Increased timeout for the transaction
         });
-        return { success: true, ...result };
-    } catch (error) {
-        console.error("Error updating user and Industry:", error.message);
         
-        // Handle database connection errors gracefully
-        if (error.message.includes("Can't reach database server") || 
-            error.message.includes("Connection refused") ||
-            error.message.includes("ENOTFOUND")) {
-            throw new Error("Database connection failed. Please check your database configuration.");
+        console.log("✅ User updated successfully");
+        
+        // Return only serializable data (no Date objects, no functions)
+        return { 
+            success: true, 
+            updatedUser: {
+                id: result.updatedUser.id,
+                industry: result.updatedUser.industry,
+                experience: result.updatedUser.experience,
+            },
+            industryInsight: {
+                id: result.industryInsight?.id,
+                industry: result.industryInsight?.industry,
+            }
+        };
+    } catch (error) {
+        // Log the error with full details for debugging
+        console.error("❌ Error updating user and Industry:", error);
+        console.error("Error details:", {
+            message: error?.message,
+            stack: error?.stack?.substring(0, 500), // Limit stack trace length
+            name: error?.name,
+            code: error?.code,
+            meta: error?.meta ? JSON.stringify(error.meta) : undefined
+        });
+        
+        // Handle specific error cases with user-friendly messages
+        const errorMsg = String(error?.message || "");
+        
+        // Database connection errors
+        if (errorMsg.includes("Can't reach database server") || 
+            errorMsg.includes("Connection refused") ||
+            errorMsg.includes("ENOTFOUND") ||
+            errorMsg.includes("P1001") ||
+            errorMsg.includes("connect ECONNREFUSED")) {
+            return { 
+                success: false, 
+                error: "Database connection failed. Please check your database configuration." 
+            };
         }
         
-        throw new Error("Failed to update profile: " + error.message);
+        // Unique constraint violations
+        if (errorMsg.includes("Unique constraint") || 
+            errorMsg.includes("duplicate") ||
+            errorMsg.includes("P2002")) {
+            if (errorMsg.includes("email")) {
+                return { 
+                    success: false, 
+                    error: "This email is already registered. Please use a different email." 
+                };
+            }
+            if (errorMsg.includes("industry")) {
+                return { 
+                    success: false, 
+                    error: "This industry already exists. Please try again." 
+                };
+            }
+            return { 
+                success: false, 
+                error: "A record with this information already exists. Please try again." 
+            };
+        }
+        
+        // Timeout errors
+        if (errorMsg.includes("timeout") || errorMsg.includes("P2024")) {
+            return { 
+                success: false, 
+                error: "Request timed out. Please try again." 
+            };
+        }
+        
+        // Record not found
+        if (errorMsg.includes("Record to update not found") || 
+            errorMsg.includes("P2025") ||
+            errorMsg.includes("Record to delete does not exist")) {
+            return { 
+                success: false, 
+                error: "User record not found. Please try signing in again." 
+            };
+        }
+        
+        // Invalid enum or data format
+        if (errorMsg.includes("Invalid") || 
+            errorMsg.includes("enum") ||
+            errorMsg.includes("Invalid value for enum")) {
+            return { 
+                success: false, 
+                error: "Invalid data format. Please check your input and try again." 
+            };
+        }
+        
+        // Provide a user-friendly error message
+        const friendlyMessage = errorMsg.length > 100 
+            ? "An unexpected error occurred. Please try again." 
+            : errorMsg.replace(/Error: /g, "").substring(0, 200);
+        
+        // Return error object instead of throwing to prevent Server Components render error
+        return { 
+            success: false, 
+            error: friendlyMessage || "Failed to update profile. Please try again." 
+        };
     }
 }
 
 
 
 export async function getUserOnboardingStatus() {
-    const { userId } = await auth();
-    if (!userId) throw new Error("Unauthorized");
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) throw new Error("Unauthorized");
 
     try {
         const user = await prisma.user.findUnique({
-            where: { clerkUserId: userId },
+            where: { clerkUserId: clerkUserId },
             select: { industry: true },
         });
 

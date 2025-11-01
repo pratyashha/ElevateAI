@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from 'react'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'   
+import { GetStartedButton } from '@/components/get-started-button'
 import Image from 'next/image'
 
 export const HeroSection = () => {
@@ -42,11 +41,9 @@ useEffect(() => {
         </div>
 
         <div className='flex justify-center'>
-          <Link href="/dashboard">
-            <Button size="lg" className="px-8">
-              Get Started
-            </Button>
-          </Link>
+          <GetStartedButton size="lg" className="px-8">
+            Get Started
+          </GetStartedButton>
         </div>
 
 

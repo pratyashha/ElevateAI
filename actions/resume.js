@@ -10,8 +10,8 @@ const model = genAI ? genAI.getGenerativeModel({model: "gemini-2.5-flash"}) : nu
 
 export async function saveResume(content){
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const { userId: clerkUserId } = await auth();
+        if (!clerkUserId) {
             throw new Error('Unauthorized');
         }
 
@@ -22,7 +22,7 @@ export async function saveResume(content){
         }
 
         const user = await prisma.user.findUnique({
-            where: { clerkUserId: userId },
+            where: { clerkUserId: clerkUserId },
         });
         if (!user) {
             throw new Error('User not found. Please complete your profile setup first.');
@@ -45,8 +45,8 @@ export async function saveResume(content){
 
 export async function getResume(){
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const { userId: clerkUserId } = await auth();
+        if (!clerkUserId) {
             return null;
         }
 
@@ -57,7 +57,7 @@ export async function getResume(){
         }
 
         const user = await prisma.user.findUnique({
-            where: { clerkUserId: userId },
+            where: { clerkUserId: clerkUserId },
         });
         if (!user) {
             return null;
@@ -74,13 +74,13 @@ export async function getResume(){
 }
 
 export async function improveWithAI({current, type}){
-    const {userId} = await auth();
-    if(!userId){
+    const { userId: clerkUserId } = await auth();
+    if(!clerkUserId){
         throw new Error('Unauthorized');
     }
     const user = await prisma.user.findUnique({
         where: {
-            clerkUserId: userId
+            clerkUserId: clerkUserId
         },
         include: {
             industryInsights: true

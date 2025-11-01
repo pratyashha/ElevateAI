@@ -1,18 +1,13 @@
 import React from 'react'
 import { getAssessments } from '@/actions/interview';
-import { getUserOnboardingStatus } from "@/actions/user";
-import { redirect } from "next/navigation";
+import { requireOnboarding } from "@/lib/onboarding-check";
 import StatsCards from './_components/stats-cards';
 import PerformanceChart from './_components/performance-chart';
 import QuizList from './_components/quiz-list';
 
 const InterviewPage = async () => {
-  // Check onboarding status - must complete before accessing interview features
-  const { isOnboarded } = await getUserOnboardingStatus();
-  
-  if (!isOnboarded) {
-    redirect("/onboarding");
-  }
+  // Check onboarding status - redirects if not onboarded
+  await requireOnboarding();
 
   const assessments = await getAssessments();
 

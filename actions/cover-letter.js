@@ -5,8 +5,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function generateCoverLetter({ companyName, jobTitle, jobDescription, contactInfo = {} }){
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const { userId: clerkUserId } = await auth();
+        if (!clerkUserId) {
             throw new Error('Unauthorized');
         }
 
@@ -25,7 +25,7 @@ export async function generateCoverLetter({ companyName, jobTitle, jobDescriptio
         try {
             if (process.env.DATABASE_URL) {
                 const user = await prisma.user.findUnique({
-                    where: { clerkUserId: userId },
+                    where: { clerkUserId: clerkUserId },
                     include: {
                         resume: true
                     }
@@ -157,8 +157,8 @@ Generate the cover letter now:
 
 export async function saveCoverLetter({ companyName, jobTitle, jobDescription, coverLetter }){
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const { userId: clerkUserId } = await auth();
+        if (!clerkUserId) {
             throw new Error('Unauthorized');
         }
 
@@ -167,7 +167,7 @@ export async function saveCoverLetter({ companyName, jobTitle, jobDescription, c
         }
 
         const user = await prisma.user.findUnique({
-            where: { clerkUserId: userId },
+            where: { clerkUserId: clerkUserId },
         });
         if (!user) {
             throw new Error('User not found. Please complete your profile setup first.');

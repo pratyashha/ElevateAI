@@ -1,22 +1,18 @@
 import React from 'react'
-import { getUserOnboardingStatus } from "@/actions/user";
 import { redirect } from "next/navigation";
+import { checkOnboardingStatus } from "@/lib/onboarding-check";
 import { industries } from "@/data/industries";
 import OnboardingForm from "./_components/onboarding-form";
 
-
 const OnboardingPage = async () => {
-  try {
-    const { isOnboarded } = await getUserOnboardingStatus();
+  const { isOnboarded } = await checkOnboardingStatus();
 
-    if (isOnboarded) {
-      redirect("/dashboard");
-    }
-  } catch (error) {
-    console.warn("Database connection failed, proceeding with onboarding:", error.message);
-    // Continue with onboarding if database is not available
+  // If already onboarded, redirect to dashboard
+  if (isOnboarded) {
+    redirect("/dashboard");
   }
 
+  // Otherwise show onboarding form
   return (
     <main>
       <OnboardingForm industries={industries} />
